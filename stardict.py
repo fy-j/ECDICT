@@ -23,7 +23,7 @@ try:
 except:
     import simplejson as json
 
-MySQLdb = None
+PyMySQL = None
 
 
 #----------------------------------------------------------------------
@@ -90,8 +90,8 @@ class StarDict (object):
         self.__conn.executescript(sql)
         self.__conn.commit()
 
-        fields = ( 'id', 'word', 'sw', 'phonetic', 'definition', 
-            'translation', 'pos', 'collins', 'oxford', 'tag', 'bnc', 'frq', 
+        fields = ( 'id', 'word', 'sw', 'phonetic', 'definition',
+            'translation', 'pos', 'collins', 'oxford', 'tag', 'bnc', 'frq',
             'exchange', 'detail', 'audio' )
         self.__fields = tuple([(fields[i], i) for i in range(len(fields))])
         self.__names = { }
@@ -121,7 +121,7 @@ class StarDict (object):
         if self.__conn:
             self.__conn.close()
         self.__conn = None
-    
+
     def __del__ (self):
         self.close()
 
@@ -313,15 +313,15 @@ class StarDict (object):
 
 
 #----------------------------------------------------------------------
-# startup MySQLdb
+# startup PyMySQL
 #----------------------------------------------------------------------
 def mysql_startup():
-    global MySQLdb
-    if MySQLdb is not None:
+    global PyMySQL
+    if PyMySQL is not None:
         return True
     try:
-        import MySQLdb as _mysql
-        MySQLdb = _mysql
+        import pymysql as _mysql
+        PyMySQL = _mysql
     except ImportError:
         return False
     return True
@@ -353,10 +353,10 @@ class DictMySQL (object):
 
     def __open (self):
         mysql_startup()
-        if MySQLdb is None:
-            raise ImportError('No module named MySQLdb')
-        fields = [ 'id', 'word', 'sw', 'phonetic', 'definition', 
-            'translation', 'pos', 'collins', 'oxford', 'tag', 'bnc', 'frq', 
+        if PyMySQL is None:
+            raise ImportError('No module named PyMySQL')
+        fields = [ 'id', 'word', 'sw', 'phonetic', 'definition',
+            'translation', 'pos', 'collins', 'oxford', 'tag', 'bnc', 'frq',
             'exchange', 'detail', 'audio' ]
         self.__fields = tuple([(fields[i], i) for i in range(len(fields))])
         self.__names = { }
@@ -369,9 +369,9 @@ class DictMySQL (object):
             for k, v in self.__uri.items():
                 uri[k] = v
             uri['db'] = self.__db
-            self.__conn = MySQLdb.connect(**uri)
+            self.__conn = PyMySQL.connect(**uri)
         else:
-            self.__conn = MySQLdb.connect(**self.__uri)
+            self.__conn = PyMySQL.connect(**self.__uri)
             return self.init()
         return True
 
@@ -484,7 +484,7 @@ class DictMySQL (object):
             sql = 'select * from stardict where word = %s;'
         else:
             return None
-        with self.__conn as c:
+        with self.__conn.cursor() as c:
             c.execute(sql, (key,))
             record = c.fetchone()
         return self.__record2obj(record)
@@ -522,7 +522,7 @@ class DictMySQL (object):
         sql = sql + ' or '.join(querys) + ';'
         query_word = {}
         query_id = {}
-        with self.__conn as c:
+        with self.__conn.cursor() as c:
             c.execute(sql, tuple(keys))
             for row in c:
                 obj = self.__record2obj(row)
@@ -542,9 +542,10 @@ class DictMySQL (object):
     def register (self, word, items, commit = True):
         sql = 'INSERT INTO stardict(word, sw) VALUES(%s, %s);'
         try:
-            with self.__conn as c:
+            with self.__conn.cursor() as c:
+                # self.__db.ping(reconnect=True)
                 c.execute(sql, (word, stripword(word)))
-        except MySQLdb.Error as e:
+        except PyMySQL.Error as e:
             self.out(str(e))
             return False
         self.update(word, items, commit)
@@ -559,7 +560,7 @@ class DictMySQL (object):
         try:
             with self.__conn as c:
                 c.execute(sql, (key,))
-        except MySQLdb.Error as e:
+        except PyMySQL.Error as e:
             self.out(str(e))
             return False
         return True
@@ -568,9 +569,10 @@ class DictMySQL (object):
     def delete_all (self, reset_id = False):
         sql1 = 'DELETE FROM stardict;'
         try:
-            with self.__conn as c:
+            # self.__conn.cursor().ping(reconnect=True)
+            with self.__conn.cursor() as c:
                 c.execute(sql1)
-        except MySQLdb.Error as e:
+        except PyMySQL.Error as e:
             self.out(str(e))
             return False
         return True
@@ -591,7 +593,7 @@ class DictMySQL (object):
             if commit:
                 try:
                     self.__conn.commit()
-                except MySQLdb.Error as e:
+                except PyMySQL.Error as e:
                     self.out(str(e))
                     return False
             return False
@@ -601,9 +603,10 @@ class DictMySQL (object):
         else:
             sql += ' WHERE id=%s;'
         try:
-            with self.__conn as c:
+            with self.__conn.cursor() as c:
+                # c.ping(reconnect=True)
                 c.execute(sql, tuple(values + [key]))
-        except MySQLdb.Error as e:
+        except PyMySQL.Error as e:
             self.out(str(e))
             return False
         return True
@@ -612,11 +615,11 @@ class DictMySQL (object):
     def count (self):
         sql = 'SELECT count(*) FROM stardict;'
         try:
-            with self.__conn as c:
+            with self.__conn.cursor() as c:
                 c.execute(sql)
                 row = c.fetchone()
                 return row[0]
-        except MySQLdb.Error as e:
+        except PyMySQL.Error as e:
             self.out(str(e))
             return -1
         return 0
@@ -625,7 +628,7 @@ class DictMySQL (object):
     def commit (self):
         try:
             self.__conn.commit()
-        except MySQLdb.Error as e:
+        except PyMySQL.Error as e:
             self.out(str(e))
             return False
         return True
@@ -667,8 +670,8 @@ class DictCsv (object):
         if filename is not None:
             self.__csvname = os.path.abspath(filename)
         self.__codec = codec
-        self.__heads = ( 'word', 'phonetic', 'definition', 
-            'translation', 'pos', 'collins', 'oxford', 'tag', 'bnc', 'frq', 
+        self.__heads = ( 'word', 'phonetic', 'definition',
+            'translation', 'pos', 'collins', 'oxford', 'tag', 'bnc', 'frq',
             'exchange', 'detail', 'audio' )
         heads = self.__heads
         self.__fields = tuple([ (heads[i], i) for i in range(len(heads)) ])
@@ -807,7 +810,7 @@ class DictCsv (object):
         else:
             fp = open(filename, 'w', encoding = codec, newline = '')
             writer = csv.writer(fp)
-        writer.writerow(self.__heads)   
+        writer.writerow(self.__heads)
         for row in self.__rows:
             newrow = []
             for n in row:
@@ -1111,7 +1114,7 @@ class LemmaDB (object):
         if stem not in self._stems:
             self._stems[stem] = {}
         if word not in self._stems[stem]:
-            self._stems[stem][word] = len(self._stems[stem]) 
+            self._stems[stem][word] = len(self._stems[stem])
         if word not in self._words:
             self._words[word] = {}
         if stem not in self._words[word]:
@@ -1411,7 +1414,7 @@ class DictHelper (object):
         import codecs
         words = {}
         with codecs.open(filename, 'r', encoding = encoding) as fp:
-            text = []   
+            text = []
             word = None
             for line in fp:
                 line = line.rstrip('\r\n')
@@ -1439,7 +1442,7 @@ class DictHelper (object):
             sys.exit(1)
         if desc is None:
             desc = u'Create by stardict.py'
-        writer = writemdict.MDictWriter(wordmap, title = title, 
+        writer = writemdict.MDictWriter(wordmap, title = title,
                 description = desc)
         with open(outname, 'wb') as fp:
             writer.write(fp)
@@ -1800,7 +1803,7 @@ def open_local(filename):
     for dir in [base, base + '/share', base + '/share/stardict']:
         if not os.path.exists(dir):
             os.mkdir(dir)
-    fn = os.path.join(base + '/share/stardict', filename)   
+    fn = os.path.join(base + '/share/stardict', filename)
     return open_dict(fn)
 
 
@@ -1811,39 +1814,11 @@ def open_local(filename):
 #----------------------------------------------------------------------
 if __name__ == '__main__':
     db = os.path.join(os.path.dirname(__file__), 'test.db')
-    my = {'host':'??', 'user':'skywind', 'passwd':'??', 'db':'skywind_t1'}
-    def test1():
-        t = time.time()
-        sd = StarDict(db, False)
-        print(time.time() - t)
-        # sd.delete_all(True)
-        print(sd.register('kiss2', {'definition':'kiss me'}, False))
-        print(sd.register('kiss here', {'definition':'kiss me'}, False))
-        print(sd.register('Kiss', {'definition':'BIG KISS'}, False))
-        print(sd.register('kiss', {'definition':'kiss me'}, False))
-        print(sd.register('suck', {'definition':'suck me'}, False))
-        print(sd.register('give', {'definition':'give me', 'detail':[1,2,3]}, False))
-        sd.commit()
-        print('')
-        print(sd.count())
-        print(sd.query('kiSs'))
-        print(sd.query(2))
-        print(sd.match('kis', 10))
-        print('')
-        print(sd.query_batch(['give', 2]))
-        print(sd.match('kisshere', 10, True))
-        return 0
+    my = {'host':'localhost', 'user':'root', 'password':'root', 'db':'skywind_t1'}
     def test2():
         t = time.time()
         dm = DictMySQL(my, init = True)
         print(time.time() - t)
-        # dm.delete_all(True)
-        print(dm.register('kiss2', {'definition':'kiss me'}, False))
-        print(dm.register('kiss here', {'definition':'kiss me'}, False))
-        print(dm.register('Kiss', {'definition':'kiss me'}, False))
-        print(dm.register('kiss', {'definition':'BIG KISS'}, False))
-        print(dm.register('suck', {'definition':'suck me'}, False))
-        print(dm.register('give', {'definition':'give me'}, False))
         print(dm.query('kiss'))
         print(dm.match('kis'))
         print('')
@@ -1852,38 +1827,7 @@ if __name__ == '__main__':
         print('count: %d'%len(dm))
         print(dm.match('kisshere', 10, True))
         return 0
-    def test3():
-        csvname = os.path.join(os.path.dirname(__file__), 'test.csv')
-        dc = DictCsv(csvname)
-        dc.delete_all()
-        print(dc.register('kiss2', {'definition':'kiss me'}, False))
-        print(dc.register('kiss here', {'definition':'kiss me'}, False))
-        print(dc.register('Kiss', {'definition':'kiss me'}, False))
-        print(dc.register('kiss', {'definition':'kiss me'}, False))
-        print(dc.register('suck', {'definition':'suck me'}, False))
-        print(dc.register('word', {'definition':'WORD WORD'}, False))
-        print(dc.query('kiss'))
-        print('')
-        dc.remove('kiss2')
-        print(dc.match('kis'))
-        print(dc.match('kisshere', 10, True))
-        dc.commit()
-        return 0
-    def test4():
-        lemma = LemmaDB()
-        t = time.time()
-        lemma.load('lemma.en.txt')
-        print('load in %s seconds'%str(time.time() - t))
-        print(len(lemma))
-        for word in ('be', 'give', 'see', 'take'):
-            print('%s -> %s'%(word, ','.join(lemma.get(word))))
-        for word in ('gave', 'taken', 'looked', 'teeth', 'speak'):
-            print('%s <- %s'%(word, ','.join(lemma.word_stem(word))))
-        lemma.save('output.txt')
-        return 0
-    def test5():
-        print(tools.validate_word('Hello World', False))
-    test3()
-
+    test2()
+    convert_dict(my,'ecdict.csv')
 
 
