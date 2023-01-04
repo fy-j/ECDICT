@@ -1814,7 +1814,9 @@ def open_local(filename):
 #----------------------------------------------------------------------
 if __name__ == '__main__':
     db = os.path.join(os.path.dirname(__file__), 'test.db')
+    # 配置mysql host、账号密码、数据库名称，数据库要提前建好，这边的数据库名叫skywind_t1
     my = {'host':'localhost', 'user':'root', 'password':'root', 'db':'skywind_t1'}
+    # 这个方法用来建表，DictMySQL 会初始化一张表格
     def test2():
         t = time.time()
         dm = DictMySQL(my, init = True)
@@ -1828,6 +1830,7 @@ if __name__ == '__main__':
         print(dm.match('kisshere', 10, True))
         return 0
     test2()
+    # 这个方法就是读取ecdict.csv文件中的内容，写入到mysql里
     convert_dict(my,'ecdict.csv')
 
 
